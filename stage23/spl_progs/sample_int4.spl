@@ -1,0 +1,215 @@
+alias userSP R1;
+userSP=SP;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13]=SP;
+SP=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1;
+
+
+alias retAdd R7;
+alias modFlag R8;
+retAdd=[[PTBR + 2*((userSP-1)/512)] * 512 + ((userSP-1)%512)];
+modFlag=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9];
+
+
+alias systemCallNum R2;
+systemCallNum=[[PTBR + 2*((userSP-5)/512)] * 512 + ((userSP-5)%512)];
+
+//create system call
+if(systemCallNum==1) then
+
+	modFlag=1;
+
+	alias fileName R3;
+	alias permission R4;
+
+	fileName=[[PTBR + 2*((userSP-4)/512)] * 512 + ((userSP-4)%512)];
+	permission=[[PTBR + 2*((userSP-3)/512)] * 512 + ((userSP-3)%512)];
+
+	alias inodeIndex R5;
+
+	//if file is present just return 0
+	inodeIndex=0;
+	while(inodeIndex < 60) do
+		if([INODE_TABLE + inodeIndex * 16 + 1]==fileName) then
+			break;
+		endif;
+		inodeIndex=inodeIndex+1;
+	endwhile;
+
+	if(inodeIndex < 60) then
+		retAdd=0;
+		modFlag=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+
+	//find free inode entry
+	inodeIndex=0;
+	while(inodeIndex < 60) do
+		if([INODE_TABLE + inodeIndex * 16 + 1]==-1) then
+			break;
+		endif;
+		inodeIndex=inodeIndex+1;
+	endwhile;
+
+	
+	if(inodeIndex >= 60) then
+		retAdd=-1;
+	else
+	
+		//inode table entry
+		R9=INODE_TABLE + inodeIndex * 16;
+		[R9 + 0]=DATA;
+		[R9 + 1]=fileName;
+		[R9 + 2]=0;
+		R10=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 3];
+		[R9 + 3]=R10;
+		[R9 + 4]=permission;
+
+		//no block is allocated now
+		[R9 + 8]=-1;
+		[R9 + 9]=-1;
+		[R9 + 10]=-1;
+		[R9 + 11]=-1;
+
+
+		//root file entry
+		R9=ROOT_FILE + inodeIndex * 8;
+		[R9 + 0]=fileName;
+		[R9 + 1]=0;
+		[R9 + 2]=DATA;
+
+		R10=[USER_TABLE + 2*([PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 3]) ];
+		
+		[R9 + 3]=R10;
+		[R9 + 4]=permission;
+
+
+		retAdd=0;
+
+	endif;
+
+modFlag=0;
+SP=userSP;
+ireturn;
+
+endif;
+
+
+
+
+
+
+//delete system call
+if(systemCallNum==4) then
+
+	modFlag=4;
+
+	alias fileName R3;
+	fileName=[[PTBR + 2*((userSP-4)/512)] * 512 + ((userSP-4)%512)];
+
+
+	alias inodeIndex R4;
+	inodeIndex=0;
+	while(inodeIndex < 60) do
+		if([INODE_TABLE + inodeIndex * 16 + 1]==fileName) then
+			break;
+		endif;
+		inodeIndex=inodeIndex+1;
+	endwhile;
+
+	if(inodeIndex >= 60) then
+		retAdd=0;
+		modFlag=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+	if([INODE_TABLE + inodeIndex * 16 ]!=DATA) then
+		retAdd=-1;
+		modFlag=0;
+		SP=userSP;
+		ireturn;	
+	endif;
+
+	//if exclusive permission is set
+	if([INODE_TABLE + inodeIndex * 16 + 4]==0) then
+
+		R10=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 3];
+		
+		if([INODE_TABLE + inodeIndex * 16 + 3]!=R10 && [INODE_TABLE + inodeIndex * 16 + 3]!=1) then
+			retAdd=-1;
+			modFlag=0;
+			SP=userSP;
+			ireturn;
+		endif;
+	endif;
+
+	//aquare the lock by calling acquire inode in r m m
+		multipush(R1,R2,R3,R4,R7,R8);
+		R1=4;
+		R2=[SYSTEM_STATUS_TABLE + 1];
+		R3=inodeIndex;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R7,R8);
+
+	//file(inode) open count is not -1 then return (means file is opened, can't be deleted)
+	if([FILE_STATUS_TABLE + inodeIndex * 4 + 1]!=-1) then
+		
+		//release the lock by calling release inode in r m m
+		multipush(R1,R2,R3,R4,R7,R8);
+		R1=5;
+		R2=[SYSTEM_STATUS_TABLE + 1];
+		R3=inodeIndex;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R7,R8);
+
+
+		retAdd=-2;
+		modFlag=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+	R5=8;
+	alias bufferNum R6;
+	while(R5 < 12 && [INODE_TABLE + inodeIndex * 16 + R5]!=-1) do
+
+		bufferNum=[INODE_TABLE + inodeIndex * 16 + R5] % 4;
+		if([BUFFER_TABLE + 4 * bufferNum]==[INODE_TABLE + inodeIndex * 16 + R5] && [BUFFER_TABLE + 4 * bufferNum + 1]==1) then
+			
+			//calling release block in m m m
+			multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+			R1=4;
+			R2=[BUFFER_TABLE + 4 * bufferNum];
+			call MOD_2;
+			multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+			//reset dirty bit in buffer table
+			[BUFFER_TABLE + 4 * bufferNum + 1]=0;
+		endif;
+		
+		R5=R5+1;
+	endwhile;
+
+	//invalidate inode table index
+	[INODE_TABLE + inodeIndex * 16 + 1]=-1;
+
+	//invalidate root file entry
+	[ROOT_FILE + inodeIndex * 8]=-1;
+		
+	//release the lock by calling release inode in r m m
+		multipush(R1,R2,R3,R4,R7,R8);
+		R1=5;
+		R2=[SYSTEM_STATUS_TABLE + 1];
+		R3=inodeIndex;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R7,R8);
+
+	retAdd=0;
+	modFlag=0;
+	SP=userSP;
+	ireturn;
+
+endif;
+

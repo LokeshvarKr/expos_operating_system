@@ -1,0 +1,28 @@
+int main(){
+	
+decl
+	int permission,temp;
+	string fileName;
+enddecl
+
+begin
+	temp=exposcall("Write",-2,"createfile");
+	temp=exposcall("Read",-1,fileName);
+	temp=exposcall("Write",-2,"permission");
+	temp=exposcall("Read",-1,permission);
+
+	temp=exposcall("Create",fileName,permission);
+	if(temp==0) then
+		temp=exposcall("Write",-2,"fileCreated");
+	endif;
+	if(temp==-1) then
+		temp=exposcall("Write",-2,"NoFreeEntry");
+	endif;
+
+	return 0;
+
+end
+
+
+
+}

@@ -1,0 +1,171 @@
+
+alias functionNum R1;
+
+
+//aquire disk
+if(functionNum==3) then
+	alias currentPid R2;
+	while([DISK_STATUS_TABLE + 0]==1) do
+		[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_DISK;
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+	endwhile;
+
+	
+	[DISK_STATUS_TABLE + 0]=1;
+	[DISK_STATUS_TABLE + 4]=currentPid;
+	return;
+
+endif;
+
+//acquare inode
+if(functionNum==4) then
+	alias pid R2;
+	alias inodeIndex R3;
+
+	while([FILE_STATUS_TABLE + 4 * inodeIndex]!=-1) do
+		[PROCESS_TABLE + pid * 16 + 4]=WAIT_FILE;
+		[PROCESS_TABLE + pid * 16 + 5]=inodeIndex;
+		
+		//calling scheduler
+		multipush(R1,R2,R3);
+		call MOD_5;
+		multipop(R1,R2,R3);
+
+	endwhile;
+
+	if([INODE_TABLE + inodeIndex * 16 + 1]==-1) then
+		R0=-1;
+		return;
+	endif;
+
+	[FILE_STATUS_TABLE + 4 * inodeIndex]=pid;
+	R0=0;
+	return;
+
+endif;
+
+
+
+//release inode
+if(functionNum==5) then
+	alias pid R2;
+	alias inodeIndex R3;
+
+	if([FILE_STATUS_TABLE + 4 * inodeIndex]!=pid) then
+		R0=-1;
+		return;
+	endif;
+
+	[FILE_STATUS_TABLE + 4 * inodeIndex]=-1;
+
+	R4=0;
+	while(R4 < 16) do
+		if([PROCESS_TABLE + R4 * 16 + 4]==WAIT_FILE && [PROCESS_TABLE + R4 * 16 + 5]==inodeIndex) then
+			[PROCESS_TABLE + R4 * 16 + 4]=READY;
+		endif;
+		R4=R4+1;
+	endwhile;
+
+	R0=0;
+	return;
+
+endif;
+
+
+//aquare semaphore
+if(functionNum==6) then
+	R3=0;
+	while(R3 < 32) do 
+		if([SEMAPHORE_TABLE + 4 * R3 + 1]==0) then
+			break;
+		endif;
+		R3=R3+1;
+	endwhile;
+
+	if(R3 < 32) then
+		[SEMAPHORE_TABLE + 4 * R3 + 0]=-1;
+		[SEMAPHORE_TABLE + 4 * R3 + 1]=1;
+		R0=R3;
+		return;
+	else
+		R0=-1;
+		return;
+	endif;
+
+endif;
+
+//release semaphore
+if(functionNum==7) then
+	
+	alias semId R2;
+	alias pid R3;
+	alias semTableIndex R5;
+	semTableIndex=[ [PROCESS_TABLE + pid * 16 + 11 ] * 512 + 496 + 2 * semId + 1]; 
+
+	if([SEMAPHORE_TABLE + 4 * semTableIndex]==pid) then
+		[SEMAPHORE_TABLE + 4 * semTableIndex]=-1;
+		[SEMAPHORE_TABLE + 4 * semTableIndex + 1]=[SEMAPHORE_TABLE + 4*semTableIndex + 1] - 1;
+
+		//wake up processes blocked by the semaphore
+		R4=0;
+		while(R4 < 16) do 
+			if( [PROCESS_TABLE + R4 * 16 + 4]==WAIT_SEMAPHORE  &&  [PROCESS_TABLE + R4 * 16 + 5]==semTableIndex) then
+				[PROCESS_TABLE + R4 * 16 + 4]=READY;
+			endif;
+			R4=R4+1;
+		endwhile;
+		R0=0;
+		return;
+	else
+		R0=-1;
+		return;
+
+	endif;
+	
+endif;
+
+
+
+//aquare terminal
+if(functionNum==8) then
+	alias currentPid R2;
+	while([TERMINAL_STATUS_TABLE + 0]==1) do 
+		[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_TERMINAL;
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+	endwhile;
+
+		[TERMINAL_STATUS_TABLE + 0]=1;
+		[TERMINAL_STATUS_TABLE + 1]=currentPid;
+		
+		return;
+
+endif;
+
+
+//release terminal
+if(functionNum==9) then
+	alias currentPid R2;
+	alias newPid R4;
+	if( (currentPid) != [TERMINAL_STATUS_TABLE + 1] ) then
+		R0=-1;
+		return;
+
+	else
+		[TERMINAL_STATUS_TABLE + 0]=0;
+		newPid=0;
+		while(newPid < 16) do
+			if([PROCESS_TABLE + newPid * 16 + 4]==WAIT_TERMINAL) then
+				[PROCESS_TABLE + newPid * 16 + 4]=READY;
+			endif;
+			newPid=newPid+1;
+		endwhile;
+
+		R0=0;
+		return; 
+	endif;
+
+endif;

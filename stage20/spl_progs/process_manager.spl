@@ -1,0 +1,124 @@
+alias functionNum R1;
+alias currentPid R2;
+
+
+//get pcb entry
+if(functionNum==1) then
+	R4=0;
+	R5=0;
+	while(R4 < 16) do
+		if([PROCESS_TABLE + (R4 * 16) + 4]==TERMINATED) then
+			R0=R4;
+			R5=1;
+			[PROCESS_TABLE + (R0 * 16) + 1]=R0;
+			[PROCESS_TABLE + (R0 * 16) + 4]=ALLOCATED;
+			[PROCESS_TABLE + (R0 * 16) + 14]=PAGE_TABLE_BASE + (R0 * 20);
+			[PROCESS_TABLE + (R0 * 16) + 15]=10;
+			return;
+		endif;
+		R4=R4+1;
+	endwhile;
+	
+	if(R5==0) then
+		R0=-1;
+		return;
+	endif;
+
+endif;
+
+//Free User Area Page
+if(functionNum==2) then
+
+	alias userAreaPage R5;
+	userAreaPage=[PROCESS_TABLE + (currentPid * 16) + 11];
+
+	multipush(R0,R1,R2,R5);
+	R1=2;
+	R2=userAreaPage;
+	call MOD_2;
+	multipop(R0,R1,R2,R5);
+	return;
+endif;
+
+
+//Exit Process
+if(functionNum==3) then
+	
+	//calling free page table
+	
+	multipush(R0,R1,R2);
+	R1=4;
+	R2=currentPid;
+	call MOD_1;
+	multipop(R0,R1,R2);
+
+	breakpoint;
+	//calling free user area page
+	multipush(R0,R1,R2);
+	R1=2;
+	R2=currentPid;
+	call MOD_1;
+	multipop(R0,R1,R2);
+
+	[PROCESS_TABLE + (currentPid * 16) + 4]=TERMINATED;
+	return;
+endif;
+
+
+
+//Free Page Table
+if(functionNum==4) then
+	
+	[PTBR+0] = -1;
+	[PTBR+1] = "0000";
+	[PTBR+2] = -1;
+	[PTBR+3] = "0000";
+
+	alias page R10;
+	page=4;
+
+	while(page < 20) do
+		
+		if([PTBR+page] != -1) then
+
+			//calling release page
+			multipush(R0,R1,R2,R10);
+			R1=2;
+			R2=[PTBR + page];
+			call MOD_2;
+			multipop(R0,R1,R2,R10);
+
+			[PTBR+page]=-1;
+			[PTBR+page+1]="0000";
+		endif;
+
+		page=page+2;
+
+	endwhile;
+
+	R10=0;
+	while(R10 < 10) do
+		if(R10==2 || R10==3 || R10==8 || R10==9) then
+			if([DISK_MAP_TABLE + (currentPid * 10) + R10]!=-1) then
+				//release block
+				multipush(R0,R1,R2,R10);
+				R1=4;
+				R2=[DISK_MAP_TABLE + (currentPid * 10) + R10];
+				call MOD_2;
+				multipop(R0,R1,R2,R10);
+			endif;
+		endif;
+		R10=R10+1;
+	endwhile;
+
+
+	//invalid all the entries of disk map table
+	R10=0;
+	while(R10 < 10) do
+		[DISK_MAP_TABLE + (currentPid * 10) + R10]=-1;
+		R10=R10+1;
+	endwhile;
+
+	return;
+
+endif;

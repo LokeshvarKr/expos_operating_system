@@ -1,0 +1,64 @@
+breakpoint;
+alias functionNum R1;
+alias currentPid R2;
+
+
+//aquire disk
+if(functionNum==3) then
+	
+	while([DISK_STATUS_TABLE + 0]==1) do
+		[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_DISK;
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+	endwhile;
+
+	breakpoint;
+	[DISK_STATUS_TABLE + 0]=1;
+	[DISK_STATUS_TABLE + 4]=currentPid;
+	return;
+
+endif;
+
+
+//aquare terminal
+if(functionNum==8) then
+
+	while([TERMINAL_STATUS_TABLE + 0]==1) do 
+		[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_TERMINAL;
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+	endwhile;
+
+		[TERMINAL_STATUS_TABLE + 0]=1;
+		[TERMINAL_STATUS_TABLE + 1]=currentPid;
+		
+		return;
+
+endif;
+
+//release terminal
+alias newPid R4;
+if(functionNum==9) then
+
+	if( (currentPid) != [TERMINAL_STATUS_TABLE + 1] ) then
+		R0=-1;
+		return;
+
+	else
+		[TERMINAL_STATUS_TABLE + 0]=0;
+		newPid=0;
+		while(newPid < 16) do
+			if([PROCESS_TABLE + newPid * 16 + 4]==WAIT_TERMINAL) then
+				[PROCESS_TABLE + newPid * 16 + 4]=READY;
+			endif;
+			newPid=newPid+1;
+		endwhile;
+
+		R0=0;
+		return; 
+	endif;
+
+endif;
+

@@ -1,0 +1,42 @@
+int main(){
+	
+	decl 
+		int temp,a,b,divident,divisor,remainder;
+	enddecl
+
+	begin
+
+		temp=exposcall("Read",-1,a);
+		temp=exposcall("Read",-1,b);
+
+		if(a==0) then
+			temp=exposcall("Write",-2,b);
+		endif;
+
+		if(b==0) then
+			temp=exposcall("Write",-2,a);
+		endif;
+
+			if(a>b) then
+				divident=a;
+				divisor=b;
+			else
+				divident=b;
+				divisor=a;
+			endif;
+
+			remainder=divident;
+		
+			while(remainder>0) do
+				remainder=divident%divisor;
+				divident=divisor;
+				divisor=remainder;
+			endwhile;
+
+			temp=exposcall("Write",-2,divident);
+
+		return 0;
+
+	end
+
+}

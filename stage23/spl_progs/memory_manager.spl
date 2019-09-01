@@ -1,0 +1,113 @@
+alias functionNum R1;
+alias pageNum R2; // this may be blockNum in function 5
+
+//Get Free Page
+if(functionNum==1) then
+
+	[SYSTEM_STATUS_TABLE + 3]= [SYSTEM_STATUS_TABLE + 3] + 1;
+	while([SYSTEM_STATUS_TABLE + 2]==0) do 
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 4]=WAIT_MEM;
+
+		//call scheduler 
+		multipush(R0,R1,R2,R3);
+		call MOD_5;
+		multipop(R0,R1,R2,R3); 
+
+	endwhile;
+
+	[SYSTEM_STATUS_TABLE + 3]= [SYSTEM_STATUS_TABLE + 3] - 1;
+	[SYSTEM_STATUS_TABLE + 2]= [SYSTEM_STATUS_TABLE + 2] - 1;
+
+	R4=0;
+	while(R4 < 128) do
+		if([MEMORY_FREE_LIST + R4]==0) then
+			[MEMORY_FREE_LIST + R4]=1;
+			R0=R4;
+			return;
+		endif;
+		R4=R4+1;
+	endwhile;
+
+endif;
+
+//Release Page 
+if(functionNum==2) then
+	
+	//page number to be released is in R2
+	[MEMORY_FREE_LIST + R2]=[MEMORY_FREE_LIST + R2] - 1;
+
+	if([MEMORY_FREE_LIST + R2]==0) then
+		[SYSTEM_STATUS_TABLE + 2]=[SYSTEM_STATUS_TABLE + 2] + 1;
+	endif;
+	R5=0;
+	while(R5 < 16) do
+		if( [PROCESS_TABLE + (R5 * 16) + 4]==WAIT_MEM ) then
+			[PROCESS_TABLE + (R5 * 16) + 4]=READY;
+		endif;
+		R5=R5+1;
+	endwhile;
+	return;
+
+endif;
+
+
+
+
+//release block
+if(functionNum==4) then
+	//R2 has block number
+	[DISK_FREE_LIST + R2]=[DISK_FREE_LIST + R2]-1;
+	return;
+endif;
+
+
+
+//get code page
+if(functionNum==5) then
+	//code block number is in R2 
+	R4=0;//for pid 
+	R6=0; //done or not;
+
+	while(R4 < 16) do 
+		R5=4; //for disk map list 
+		while(R5 < 8) do 
+			if(([DISK_MAP_TABLE + (R4 * 10) + R5]==R2) && ([PAGE_TABLE_BASE + (R4 * 20) + (R5 * 2) + 1]=="0100") ) then
+				R0=[PAGE_TABLE_BASE + (R4 * 20) + (R5 * 2) + 0];
+				[MEMORY_FREE_LIST + R0]=[MEMORY_FREE_LIST + R0] + 1;
+				R6=1;
+				
+				return;
+			endif;
+
+			R5=R5+1;
+		endwhile;
+		
+		R4=R4+1;
+	endwhile;
+
+	//if code is not in memory 
+	if(R6==0) then
+		//calling get free page
+		multipush(R1,R2,R3,R6);
+		R1=1;
+		call MOD_2;
+		multipop(R1,R2,R3,R6);
+
+
+		//calling disk load to load disk block in memory
+		// same work as load(R0,R2)
+		multipush(R0,R1,R2,R3,R6);
+		R1=2;
+		R3=R0;
+		R4=R2;
+		R2=[SYSTEM_STATUS_TABLE + 1];
+		call MOD_4;
+		multipop(R0,R1,R2,R3,R6);
+
+		
+		return;
+	
+	endif;
+
+endif;
+breakpoint;

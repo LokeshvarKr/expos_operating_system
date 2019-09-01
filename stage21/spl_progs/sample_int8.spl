@@ -1,0 +1,113 @@
+//fork system call
+breakpoint;
+
+alias userSP R1;
+userSP=SP;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9]=8;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13]=SP;
+SP=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1;
+
+alias parentPid R2; 
+parentPid=[SYSTEM_STATUS_TABLE + 1]; 
+
+//calling get pcb entry
+multipush(R1,R2);
+R1=1;
+call MOD_1;
+multipop(R1,R2);
+alias childPid R3;
+childPid=R0;
+
+if(childPid==-1) then
+	[([PTBR + 2*((userSP-1)/512)] * 512 ) +  ((userSP-1) % 512)]=-1;
+	[PROCESS_TABLE + (parentPid * 16) + 9]=0;
+	SP=userSP;
+	ireturn;
+else
+	
+	//allocate two pages for stack and one for user area 
+	//calling get free page for stack 1
+	multipush(R1,R2,R3);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3);
+	[PAGE_TABLE_BASE + (childPid * 20) + 16]=R0;
+
+	
+	//calling get free page for stack 2
+	multipush(R1,R2,R3);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3);
+	[PAGE_TABLE_BASE + (childPid * 20) + 18]=R0;
+
+	
+	//calling get free page for user area
+	//calling get free page 2 times
+	multipush(R1,R2,R3);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3);
+	[PROCESS_TABLE + (childPid * 16) + 11]=R0;
+	
+	//set the process table entry
+	[PROCESS_TABLE + (childPid * 16) + 3]=[PROCESS_TABLE + (parentPid * 16) + 3];
+	[PROCESS_TABLE + (childPid * 16) + 6]=[PROCESS_TABLE + (parentPid * 16) + 6];
+	[PROCESS_TABLE + (childPid * 16) + 10]=[PROCESS_TABLE + (parentPid * 16) + 10];
+	[PROCESS_TABLE + (childPid * 16) + 7]=[PROCESS_TABLE + (parentPid * 16) + 7];
+	[PROCESS_TABLE + (childPid * 16) + 13]=[PROCESS_TABLE + (parentPid * 16) + 13];
+
+	[PROCESS_TABLE + (childPid * 16) + 9]=0;
+	[PROCESS_TABLE + (childPid * 16) + 12]=0;
+	[PROCESS_TABLE + (childPid * 16) + 0]=0;
+	[PROCESS_TABLE + (childPid * 16) + 2]=parentPid;
+	[PROCESS_TABLE + (childPid * 16) + 4]=CREATED;
+
+	
+	//initialize disk map table 
+	R4=0;
+	while(R4 < 10) do
+		[DISK_MAP_TABLE + (childPid*10) + R4]=[DISK_MAP_TABLE + (parentPid*10) + R4];
+		R4=R4+1;
+	endwhile;
+
+	
+	//initialibe page table
+	R4=0;
+	while(R4 < 10) do
+		if(R4==8 || R4==9) then
+			[PAGE_TABLE_BASE + (childPid * 20) + 2*R4 + 1]=[PAGE_TABLE_BASE + (parentPid * 20) + 2*R4 + 1];
+		else
+			[PAGE_TABLE_BASE + (childPid * 20) + 2*R4]=[PAGE_TABLE_BASE + (parentPid * 20) + 2*R4];
+			[PAGE_TABLE_BASE + (childPid * 20) + 2*R4 + 1]=[PAGE_TABLE_BASE + (parentPid * 20) + 2*R4 + 1];
+		endif;
+		R4=R4+1;
+	endwhile;
+
+	//update memory free count
+	R4=PAGE_TABLE_BASE + (childPid * 20);
+	R5=0;
+	while(R5<10) do
+		if([R4 + 2*R5]!=-1) then
+			[MEMORY_FREE_LIST + [R4+2*R5]]=[MEMORY_FREE_LIST + [R4+2*R5]]+1;
+		endif;
+		R5=R5+1;
+	endwhile;
+
+	//copy the content of user stack page of parent to user stack page of child
+	R4=8*512;
+	while(R4 <= userSP) do
+		[([PAGE_TABLE_BASE + (childPid*20) + 2*(R4/512)] * 512)+ (R4%512)]
+		=[([PAGE_TABLE_BASE + (parentPid*20) + 2*(R4/512)] * 512) + (R4%512)];
+		R4=R4+1;
+	endwhile;
+
+	[[PROCESS_TABLE + (childPid*16) + 11] * 512]=BP;
+
+	[([PAGE_TABLE_BASE + (parentPid * 20) + 2*((userSP-1)/512)] * 512) + ((userSP-1) % 512)]=childPid;
+	[([PAGE_TABLE_BASE + (childPid * 20) + 2*((userSP-1)/512)] * 512) + (userSP-1) % 512]=0;
+	[PROCESS_TABLE + (parentPid*16) + 9]=0;
+	SP=[PROCESS_TABLE + (parentPid * 16) + 13];
+	ireturn;
+
+endif;

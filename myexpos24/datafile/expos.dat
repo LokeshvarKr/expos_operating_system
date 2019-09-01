@@ -1,0 +1,18 @@
+Open system call
+Open system call takes a filename as an argument from the user program. To perform read/write operations on a file, a process must open the file first. Open system call creates a new open instance for the file and returns a file descriptor (index of the new per-process resource table entry created for the open instance). Further operations on the open instance are performed using this file descriptor. A process can open a file several times and each time a different open instance (and new descriptor) is created. The global data structure, Open file table keeps track of all the open file instances in the system. (A new entry is created in this table whenever the Open system call is invoked with any file name.) File status table is a global data structure that maintains an entry for every file in the system (not just opened files).
+
+Open system call creates new entries for the file to be opened in the per-process resource table and the open file table. A process keeps track of an open instance by storing the index of the open file table entry of the instance in (the corresponding) resource table entry. When a file is opened, the OPEN INSTANCE COUNT in the open file table is set to 1 and seek position is initialized to the starting of the file (0).
+
+Each time when a file is opened, the FILE OPEN COUNT in the file status table entry for the file is incremented by one. Open system call invokes Open function of file manager module to deal with global data structures - file status table and open file table. When a process executes a Fork system call, the open instances of files (and semaphores) created by the process are shared between the current process and its child. As an effect of Fork, the OPEN INSTANCE COUNT in the open file table entry corresponding to the open instance is incremented by one.
+
+It is necessary not to be confused between FILE OPEN COUNT (in the file status table) and OPEN INSTANCE COUNT (in the open file table). The former keeps track of the global count of how many times Open system call has been invoked with each file in the system - that is the number of open instances of a file at a given point of time. This count is decremented each time when a Close is invoked on the file by any process. Each open instance could be further shared between multiple processes (via Fork). OPEN INSTANCE COUNT value of a particular open instance essentially keeps track of this "share count".
+
+Implement Open system call using the detailed algorithm provided here.
+
+
+Close system call
+When a process no longer needs to perform read/write operations on an open instance of a file, the open instance may be closed using the Close system call. Even if a process does not explicitly close an open instance by invoking Close system call, the open instance is closed at the termination of the process by Exit system call.
+
+Close system call takes a file descriptor (index of the per-process resource table entry) as argument from the user program. Close system call invalidates the per-process resource table entry (corresponding to given file descriptor) by storing -1 in the Resource Identifier field. To decrement share count of the open instance in the open file table and update the file status table accordingly, Close function of file manager module is invoked by the Close system call.
+
+Implement Close system call using the detailed algorithm provided here.

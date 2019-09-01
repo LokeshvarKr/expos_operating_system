@@ -1,0 +1,104 @@
+alias functionNum R1;
+
+//disk store
+if(functionNum==1) then
+	alias currentPid R2;
+	//pageNum contains in R3 ,blockNum contains in  R4
+	
+	//calling aquare disk
+	multipush(R1,R2,R3,R4);
+	R1=3;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R1,R2,R3,R4);
+
+	[DISK_STATUS_TABLE+1]=1;
+	[DISK_STATUS_TABLE+2]=R3;
+	[DISK_STATUS_TABLE+3]=R4;
+
+	store(R3,R4);
+
+	[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_DISK;
+
+	multipush(R1,R2,R3,R4);
+	call MOD_5;
+	multipop(R1,R2,R3,R4);
+	return;
+
+endif;
+
+
+//disk load
+if(functionNum==2) then
+	alias currentPid R2;
+	//pageNum contains in R3   blockNum contains in  R4
+	//calling aquare disk
+	multipush(R1,R2,R3,R4);
+	R1=3;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R1,R2,R3,R4);
+
+	[DISK_STATUS_TABLE+1]=0;
+	[DISK_STATUS_TABLE+2]=R3;
+	[DISK_STATUS_TABLE+3]=R4;
+	
+	load(R3,R4);
+	[PROCESS_TABLE + (currentPid * 16) + 4]=WAIT_DISK;
+
+	multipush(R1,R2,R3,R4);
+	call MOD_5;
+	multipop(R1,R2,R3,R4);
+	return;
+
+endif;
+
+//write terminal
+if(functionNum==3) then
+	alias currentPid R2;
+	alias word R3;
+
+	// calling for aquire terminal 
+	multipush(R1,R2,R3);
+	R1=8;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R1,R2,R3);
+
+	print word;
+
+	//calling for release terminal
+	multipush(R1,R2,R3);
+	R1=9;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R1,R2,R3);
+	return;
+endif;
+
+//read terminal
+if(functionNum==4) then
+	alias currentPid R2;
+	//address of word in R3;
+
+	//calling for aquire terminal
+	multipush(R1,R2,R3);
+	R1=8;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R1,R2,R3);
+
+	
+	read;
+
+	[PROCESS_TABLE + (currentPid*16) + 4]=WAIT_TERMINAL;
+	
+	//invoke the scheduler
+	multipush(R1,R2,R3);
+	call MOD_5;
+	multipop(R1,R2,R3); 
+
+	[([PTBR + 2*(R3/512)] * 512) + (R3 % 512)]=[PROCESS_TABLE + currentPid*16 + 8];
+	
+	return;
+endif;

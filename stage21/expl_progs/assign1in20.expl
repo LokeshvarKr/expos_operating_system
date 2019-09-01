@@ -1,0 +1,25 @@
+
+int main(){
+	
+	decl
+		int pid,temp;
+		string fileName;
+	enddecl
+
+	begin
+
+		pid=exposcall("Fork");
+		if(pid==0) then
+			temp=exposcall("Write",-2,"EnterOddFile");
+			temp=exposcall("Read",-1,fileName);
+			temp=exposcall("Exec",fileName);
+		else
+			temp=exposcall("Write",-2,"EnterEvenFile");
+			temp=exposcall("Read",-1,fileName);
+			temp=exposcall("Exec",fileName);
+		endif;
+		return 0;
+	
+	end
+
+}

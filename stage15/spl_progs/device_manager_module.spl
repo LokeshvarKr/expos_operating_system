@@ -1,0 +1,23 @@
+alias functionNum R1;
+alias currentPid R2;
+
+if(functionNum==3) then 
+	multipush(R1,R2);
+	R1=8;
+	R2=currentPid;
+	call MOD_0;
+	multipop(R2,R1);
+
+	print R3;
+
+	multipush(R1,R2);
+	R1=9;
+	R2=currentPid;
+	R5=call MOD_0;
+	multipop(R2,R1);
+	return;
+
+else
+	return;
+	
+endif;

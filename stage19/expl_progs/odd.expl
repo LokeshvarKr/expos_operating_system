@@ -1,0 +1,25 @@
+int main(){
+	
+	decl
+		int num,x,temp,n;
+	enddecl
+
+	begin
+		breakpoint;
+		n=50;
+		temp=exposcall("Read",-1,n);
+		num=1;
+		while(num<n)do
+			x=num%2;
+			if(x==1) then 
+				temp=exposcall("Write",-2,num);
+			endif;
+			num=num+1;
+		endwhile;
+
+		return 0;
+
+	end
+
+
+}

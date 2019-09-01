@@ -1,0 +1,28 @@
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 5;
+alias userSP R0;
+userSP = SP;
+
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 13] = SP;
+SP=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 -1;
+
+alias offset R1;
+alias fileDescriptor R2;
+offset=(userSP-4)%512;
+
+fileDescriptor=[ [PTBR + ((userSP-4)/512)*2 ] * 512 + offset ];
+
+if(fileDescriptor!=-2)then
+	[([PTBR + 2*((userSP-1)/512)]*512) + ((userSP-1) % 512)]=-1;
+else
+	multipush(R0,R1,R2);
+	R1=3;
+	R2=[SYSTEM_STATUS_TABLE + 1];
+	R3=[[PTBR + 2 * ((userSP - 3) / 512)] * 512 + ((userSP - 3) % 512)];
+	call MOD_4;
+	multipop(R2,R1,R0);
+	[([PTBR + 2*((userSP-1)/512)]*512) + ((userSP-1) % 512)]=0;
+endif;
+
+SP = userSP;
+
+ireturn;
