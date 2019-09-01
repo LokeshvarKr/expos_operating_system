@@ -1,0 +1,185 @@
+//fork system call
+
+alias userSP R1;
+userSP=SP;
+
+alias parentProcess R2;
+parentProcess=PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16;
+
+[parentProcess + 9]=8;
+[parentProcess + 13]=SP;
+SP=[parentProcess + 11] * 512 - 1;
+
+alias parentPid R3;
+parentPid=[SYSTEM_STATUS_TABLE + 1]; 
+
+//calling get pcb entry
+multipush(R1,R2,R3);
+R1=1;
+call MOD_1;
+multipop(R1,R2,R3);
+alias childPid R4;
+childPid=R0;
+
+
+if(childPid==-1) then
+	[([PTBR + 2*((userSP-1)/512)] * 512 ) +  ((userSP-1) % 512)]=-1;
+	[parentProcess + 9]=0;
+	SP=userSP;
+	ireturn;
+else
+	
+	alias childProcess R5;
+	alias childPageTable R6;
+
+	childProcess=PROCESS_TABLE + (childPid * 16);
+	childPageTable=PAGE_TABLE_BASE + (childPid * 20);
+
+	//allocate two pages for stack  
+	//calling get free page for stack 1
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3,R4,R5,R6);
+	[childPageTable + 16]=R0;
+
+	
+	//calling get free page for stack 2
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3,R4,R5,R6);
+	[childPageTable + 18]=R0;
+
+	
+	//calling get free page for user area
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1=1;
+	call MOD_2;
+	multipop(R1,R2,R3,R4,R5,R6);
+	[childProcess + 11]=R0;
+	
+
+	//alocating the parent's heap pages (if not present)
+	if([PTBR + 4]==-1) then
+
+		//calling get free page for heap 1
+		multipush(R1,R2,R3,R4,R5,R6);
+		R1=1;
+		call MOD_2;
+		multipop(R1,R2,R3,R4,R5,R6);
+		[PTBR + 4]=R0;
+		[PTBR + 5]="0110";
+
+	endif;
+
+
+	if([PTBR + 6]==-1) then
+
+		//calling get free page for heap 2
+		multipush(R1,R2,R3,R4,R5,R6);
+		R1=1;
+		call MOD_2;
+		multipop(R1,R2,R3,R4,R5,R6);
+		[PTBR + 6]=R0;
+		[PTBR + 7]="0110";
+		
+	endif;
+
+
+
+	//set the process table entry
+	[childProcess + 3]=[parentProcess + 3];
+	[childProcess + 6]=[parentProcess + 6];
+	[childProcess + 7]=[parentProcess + 7];
+	[childProcess + 10]=[parentProcess + 10];
+	[childProcess + 13]=[parentProcess + 13];
+
+	[childProcess + 9]=0;
+	[childProcess + 12]=0;
+	[childProcess + 0]=0;
+	[childProcess + 2]=parentPid;
+	[childProcess + 4]=CREATED;
+	
+
+
+	//copy the per process disk map table 
+	R8=0;
+	while(R8 < 10) do
+		[DISK_MAP_TABLE + (childPid*10) + R8]=[DISK_MAP_TABLE + (parentPid*10) + R8];
+		R8=R8+1;
+	endwhile;
+
+
+	//copy the per process resource table
+	//for semaphore and file
+
+	R7=[parentProcess + 11] * 512 + 496;
+	R8=[childProcess + 11] * 512 + 496;
+	R9=0;
+	while(R9 < 8) do 
+		
+		[R8 + 2 * R9]=[R7 + 2 * R9];
+		[R8 + 2 * R9 + 1]=[R7 + 2 * R9 + 1];
+
+		if([R7 + 2 * R9]==1) then
+		 	R10=[R7 + 2 * R9 + 1];
+			[SEMAPHORE_TABLE + 4 * R10 + 1]=[SEMAPHORE_TABLE + 4 * R10 + 1] + 1;
+		endif;
+
+		if([R7 + 2 * R9]==0) then
+			R10=[R7 + 2 * R9 + 1];
+			[OPEN_FILE_TABLE + 4 * R10 + 1]=[OPEN_FILE_TABLE + 4 * R10 + 1] + 1;
+		endif;
+		
+		R9=R9+1;
+
+	endwhile;
+
+	
+	//initialize page table
+	alias parentPageTable R7;
+	parentPageTable=PAGE_TABLE_BASE +(parentPid * 20);
+
+	R8=0;
+	while(R8 < 10) do
+		if(R8==8 || R8==9) then
+			[childPageTable + 2 * R8 + 1]=[parentPageTable + 2 * R8 + 1];
+		else
+			[childPageTable + 2 * R8]=[parentPageTable + 2 * R8];
+			[childPageTable + 2 * R8 + 1]=[parentPageTable + 2 * R8 + 1];
+		endif;
+		R8=R8+1;
+	endwhile;
+
+
+	//update memory free count
+	R8=0;
+	while(R8 < 10) do
+		if([childPageTable + 2 * R8]!=-1) then
+			[MEMORY_FREE_LIST + [childPageTable + 2 * R8]]=[MEMORY_FREE_LIST + [childPageTable + 2 * R8 ]] + 1;
+		endif;
+		R8=R8+1;
+	endwhile;
+
+
+	//copy the content of user stack page of parent to user stack page of child
+	R8=8*512;
+	while(R8 <= userSP) do
+		[([childPageTable + 2*(R8/512)] * 512)+ (R8%512)]
+		=[([parentPageTable + 2*(R8/512)] * 512) + (R8%512)];
+		R8=R8+1;
+	endwhile;
+
+
+	[[childProcess + 11] * 512]=BP;
+
+	[([parentPageTable + 2*((userSP-1)/512)] * 512) + ((userSP-1) % 512)]=childPid;
+	[([childPageTable + 2*((userSP-1)/512)] * 512) + (userSP-1) % 512]=0;
+	
+	[parentProcess + 9]=0;
+	SP=[parentProcess + 13];
+
+	ireturn;
+
+endif;

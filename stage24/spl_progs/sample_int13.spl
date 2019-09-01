@@ -1,0 +1,87 @@
+
+alias userSP R3;
+userSP=SP;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 13]=SP;
+
+SP=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 - 1;
+
+alias systemCallNum R4;
+systemCallNum=[ [PTBR + 2 * ((userSP-5)/512)] * 512 + ((userSP-5)%512) ];
+
+
+//sem get
+if(systemCallNum==17) then
+
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9]=17;
+	
+	//find free entry in per-process-resourse-table
+	R5=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 + 496;
+	R6=0;
+	while(R6 < 8) do
+		if([R5 + 2*R6]==-1) then
+			break;
+		endif;
+		R6=R6+1;
+	endwhile;
+
+
+	if(R6 < 8) then
+
+		[R5 + 2*R6]=1; //indicate that resource is semaphore
+
+		//call acquire semaphore
+		multipush(R3,R4,R5,R6);
+		R1=6;
+		R2=[SYSTEM_STATUS_TABLE + 1];
+		call MOD_0;
+		multipop(R3,R4,R5,R6);
+			
+		if(R0==-1) then		
+			[[PTBR + 2 * ((userSP-1)/512)] * 512 + ((userSP-1)%512)] = -2;	
+		else
+			[R5+2*R6+1]=R0;
+			[[PTBR + 2 * ((userSP-1)/512)] * 512 + ((userSP-1)%512)] = R6;
+		endif;
+	else
+		[[PTBR + 2 * ((userSP-1)/512)] * 512 + ((userSP-1)%512)] = -1;
+	endif;
+
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9]=0;
+	SP=userSP;
+	ireturn;
+
+endif;
+
+
+
+//sem release
+if(systemCallNum==18) then
+
+
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9]=18;
+	
+	alias semId R5;
+	semId = [[PTBR + 2 * ((userSP-4)/512)] * 512 + ((userSP-4)%512)];
+	R6=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 + 496;
+
+	if( semId < 0 || semId > 7 || [R6 + 2*semId]!=1 ) then
+		[[PTBR + 2 * ((userSP-1)/512)] * 512 + ((userSP-1)%512)]=-1;
+	else
+		//call release semaphore in resource m m
+		multipush(R3,R4,R5,R6);
+		R1=7;
+		R2=semId;
+		R3=[SYSTEM_STATUS_TABLE + 1];
+		call MOD_0;
+		multipop(R3,R4,R5,R6);
+		
+		[R6 + 2*semId]=-1;
+		[[PTBR + 2 * ((userSP-1)/512)] * 512 + ((userSP-1)%512)]=0;
+
+	endif;
+
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9]=0;
+	SP=userSP;
+	ireturn;
+
+endif;

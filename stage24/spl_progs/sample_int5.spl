@@ -1,0 +1,103 @@
+alias userSP R1;
+userSP=SP;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13]=SP;
+SP=[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1;
+
+
+alias retVal R2;
+alias modFlag R3;
+retVal=[PTBR + 2*((userSP-1)/512)] * 512 + ((userSP-1)%512);
+modFlag=PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9;
+
+
+alias systemCallNum R4;
+systemCallNum=[[PTBR + 2*((userSP-5)/512)] * 512 + ((userSP-5)%512)];
+
+//open system call
+if(systemCallNum==2) then
+	[modFlag]=2;
+	alias fileName R5;
+	fileName=[[PTBR + 2*((userSP-4)/512)] * 512 + ((userSP-4)%512)];
+
+	R6=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 + 496;
+	alias fileDescriptor R7;
+	fileDescriptor=0;
+	while(fileDescriptor < 8) do
+		if([R6 + 2 * fileDescriptor]==-1) then
+			break;
+		endif;
+		fileDescriptor=fileDescriptor + 1;
+	endwhile;
+
+	if(fileDescriptor == 8) then
+		[retVal]=-3;
+		[modFlag]=0;
+		ireturn;
+	endif;
+	
+	//call open from the file manager module
+	multipush(R1,R2,R3,R4,R5,R6,R7);
+	R1=3;
+	R2=fileName;
+	call MOD_3;
+	multipop(R1,R2,R3,R4,R5,R6,R7);
+
+	if(R0==-1 || R0==-2) then
+		[retVal]=R0;
+		[modFlag]=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+	[R6 + 2 * fileDescriptor]=0;
+	[R6 + 2 * fileDescriptor + 1]=R0;
+
+		
+	[retVal]=fileDescriptor;
+	[modFlag]=0;
+	SP=userSP;
+	ireturn;
+
+endif;
+
+
+//close system call 
+if(systemCallNum==3) then
+	[modFlag]=3;
+	alias fileDescriptor R5;
+	fileDescriptor=[[PTBR + 2 * ((userSP-4)/512)] * 512 + ((userSP-4)%512)];
+
+	if(fileDescriptor < 0 && fileDescriptor >= 8) then
+		[retVal]=-1;
+		[modFlag]=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+	R6=[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 11] * 512 + 496;
+	if([R6 + 2 * fileDescriptor]!=0) then
+		[retVal]=-1;
+		[modFlag]=0;
+		SP=userSP;
+		ireturn;
+	endif;
+
+	alias fileTableIndex R7;
+	fileTableIndex=[R6 + 2 * fileDescriptor + 1];
+
+	//call close from the file manager module
+	multipush(R1,R2,R3,R4,R5,R6,R7);
+	R1=4;
+	R2=fileTableIndex;
+	call MOD_3;
+	multipop(R1,R2,R3,R4,R5,R6,R7);
+
+	[R6 + 2 * fileDescriptor]=-1;
+
+	[retVal]=0;
+	[modFlag]=0;
+	SP=userSP;
+	ireturn;
+
+endif;
+

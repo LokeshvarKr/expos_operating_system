@@ -1,0 +1,53 @@
+type
+	List {
+	int data;
+	List next;
+	}
+endtype
+
+decl 
+	List head;
+enddecl
+
+int main(){
+	decl 
+		int n,temp,x,num;
+		List node,H;
+	enddecl
+
+	begin
+	
+	temp=exposcall("Write",-2,"HowManyNums?");
+	temp=exposcall("Read",-1,n);
+	temp=exposcall("Heapset");
+	head=null;
+	x=0;
+	temp=exposcall("Write",-2,"EnterNumbers");
+	
+	while(n > x) do
+		temp=exposcall("Read",-1,num);
+		node=exposcall("Alloc",8);
+		node.data=num;
+		node.next=null;
+		if(head==null) then
+			head=node;
+			H=head;
+		else
+			H.next=node;
+			H=H.next;
+		endif;
+		n=n-1;
+	endwhile;
+
+	temp=exposcall("Write",-2,"NumSAre");
+	H=head;
+	while(H!=null) do
+		temp=exposcall("Write",-2,H.data);
+		H=H.next;
+	endwhile;
+
+	return 1;
+
+	end
+
+}

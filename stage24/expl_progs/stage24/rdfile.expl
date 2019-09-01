@@ -1,0 +1,31 @@
+int main(){
+	decl
+
+		string fileName,data;
+		int temp,filed,a;
+
+	enddecl
+
+	begin
+		temp=exposcall("Read",-1,fileName);
+		filed = exposcall("Open",fileName);
+		
+		temp= exposcall("Write",-2,"filed");
+		temp= exposcall("Write",-2,filed);
+
+		a=0;
+		data="xyz";
+		temp= exposcall("Write",-2,"data");
+		temp= exposcall("Write",-2,data);
+
+		while(a!=-2) do
+			a = exposcall("Read",filed,data);
+			temp= exposcall("Write",-2,data);
+		endwhile;
+		temp= exposcall("Write",-2,"a");
+		temp= exposcall("Write",-2,a);
+
+		return 0;
+	end
+
+}
